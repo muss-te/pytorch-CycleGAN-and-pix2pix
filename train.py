@@ -22,19 +22,39 @@ import time
 from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
-from util.visualizer import Visualizer
+from util.visualizer import Visualizer, plot_losses_from_log_files
+import glob
+import os
+from teupy import RemoteHandler
 
-if __name__ == '__main__':
-    opt = TrainOptions().parse()   # get training options
+# import torch
+
+
+def train_main(raw_args=None):
+    # print(torch.backends.cudnn.benchmark)
+    opt = TrainOptions().parse(raw_args)   # get training options
+    if opt.debug_mode:
+        import multiprocessing
+        multiprocessing.set_start_method('spawn', True)
+        opt.num_threads = 0
+
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
+
+    existing_epochs = glob.glob(opt.checkpoints_dir + '/' + opt.name + '/*[0-9]_net_G_A.pth')
+    if opt.restart_training and len(existing_epochs)>0:
+        opt.epoch = int(os.path.splitext(os.path.basename(existing_epochs[-1]))[0].split('_')[0])
+        opt.epoch_count = opt.epoch + 1
+
+    plot_losses_from_log_files(opt, dataset_size, domain=['A', 'B'], specified=['G', 'D', 'cycle'])
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
 
+    
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
@@ -75,3 +95,17 @@ if __name__ == '__main__':
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
         model.update_learning_rate()                     # update learning rates at the end of every epoch.
+
+if __name__ == '__main__':
+    # train_main()
+    name = 'Neutrophiler_reif_A_vs_unreif_B_train'
+    rm = RemoteHandler('CycleGAN', user='temirlan')
+    data_dir = os.path.join('/', 'work', 'scratch', 'temirlan', 'Minimal Working Example', 'orig_images_centred', 
+        'Neutrophiler', name)
+    train_main(['--dataroot', data_dir, '--name', 'Neutrophiler_reif_A_vs_unreif_B_test', '--model', 'cycle_gan', 
+                '--dataset_mode', 'unaligned', '--target_D_real', '1.0', '--restart_training',
+                '--preprocess', 'none', '--display_id', '0', '--debug_mode',
+                '--checkpoints_dir', rm.path(os.path.join('checkpoints'))])
+    # train_main(['--dataroot', data_dir, '--name', 'Neutro_debug_test', '--model', 'cycle_gan', 
+    #             '--dataset_mode', 'lympho',
+    #             '--preprocess', 'none', '--restart_training', '--display_id', '0', '--num_threads', '4'])

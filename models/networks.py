@@ -9,7 +9,6 @@ from torch.optim import lr_scheduler
 # Helper Functions
 ###############################################################################
 
-
 class Identity(nn.Module):
     def forward(self, x):
         return x
@@ -181,7 +180,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         than a full-image discriminator and can work on arbitrarily-sized images
         in a fully convolutional fashion.
 
-        [n_layers]: With this mode, you cna specify the number of conv layers in the discriminator
+        [n_layers]: With this mode, you can specify the number of conv layers in the discriminator
         with the parameter <n_layers_D> (default=3 as used in [basic] (PatchGAN).)
 
         [pixel]: 1x1 PixelGAN discriminator can classify whether a pixel is real or not.
@@ -295,8 +294,10 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
         elif type == 'fake':
             interpolatesv = fake_data
         elif type == 'mixed':
+            # alpha = torch.rand(real_data.shape[0], 1)
             alpha = torch.rand(real_data.shape[0], 1, device=device)
             alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+            # alpha = alpha.to(device)
             interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
         else:
             raise NotImplementedError('{} not implemented'.format(type))
@@ -481,7 +482,7 @@ class UnetSkipConnectionBlock(nn.Module):
             input_nc (int) -- the number of channels in input images/features
             submodule (UnetSkipConnectionBlock) -- previously defined submodules
             outermost (bool)    -- if this module is the outermost module
-            innermost (bool)    -- if this module is the innermost module
+            innermost (bool)    -- if this module is the innermost module (at the bottom)
             norm_layer          -- normalization layer
             user_dropout (bool) -- if use dropout layers.
         """

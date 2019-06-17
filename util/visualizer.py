@@ -6,6 +6,8 @@ import time
 from . import util, html
 from subprocess import Popen, PIPE
 from scipy.misc import imresize
+import matplotlib.pyplot as plt
+import re
 
 if sys.version_info[0] == 2:
     VisdomExceptionBase = Exception
@@ -47,6 +49,50 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
         txts.append(label)
         links.append(image_name)
     webpage.add_images(ims, txts, links, width=width)
+
+
+def plot_losses_from_log_files(opt, dataset_size, domain='', specified=['G', 'D', 'cycle', 'idt']):
+    """ 
+    This function plots losses from loss_log.txt files in one figure.
+
+    Parameters:
+        opt             -- stores all the experiment flags; needs to be a subclass of BaseOptions
+        dataset_size    -- the size of the dataset
+        domain          -- choose which domain to plot [ '' | 'A' | 'B' ], where empty string means both domains
+        specified       -- a string or a list with losses to be plotted ['G', 'D', 'cycle', 'idt']. 
+     """
+    if isinstance(domain, str):
+        domain = [domain]
+    if isinstance(specified, str):
+        specified = [specified]
+
+    # Extracting the lists with epochs, iterations and losses
+    load_path = os.path.join(opt.checkpoints_dir, opt.name)
+    log_dict = {}
+    for line in open(load_path + '/loss_log.txt', 'r'):
+        if '=' not in line.split()[0]:
+            for w, word in enumerate(line.split()):
+                new_word = re.sub('[^a-zA-Z_]', "", word)
+                if new_word not in log_dict and not re.sub("[^0-9]", "", word).isdigit():
+                    log_dict.update({new_word: []})
+                if new_word in log_dict:
+                    log_dict[new_word].append(re.sub('[^0-9.]','',line.split()[w+1]))
+
+    # Plotting the extracted and specified losses and saving the plot
+    x_axis = np.array(log_dict['epoch'], dtype=np.float) + np.array(log_dict['iters'], dtype=np.float)/dataset_size
+    for d in domain:
+        plt.figure()
+        colors = iter("bgrcmykw")
+        # linestyles = iter(['', '--', '-.', ':', '.', ',', '^', '*'])
+        for key in log_dict:
+            if '_' + d in key and key.split('_')[0] in specified:
+                plt.plot(x_axis, np.array(log_dict[key], dtype=np.float), colors.__next__(), label=key)
+        plt.xlabel('epochs')
+        plt.ylabel('losses_' + d)
+        plt.title('Losses')
+        plt.legend()
+        plt.savefig(load_path + '/losses_' + d + '.png')
+    # plt.show()
 
 
 class Visualizer():
@@ -206,7 +252,7 @@ class Visualizer():
                 win=self.display_id)
         except VisdomExceptionBase:
             self.create_visdom_connections()
-
+    
     # losses: same format as |losses| of plot_current_losses
     def print_current_losses(self, epoch, iters, losses, t_comp, t_data):
         """print current losses on console; also save the losses to the disk
@@ -225,3 +271,4 @@ class Visualizer():
         print(message)  # print the message
         with open(self.log_name, "a") as log_file:
             log_file.write('%s\n' % message)  # save the message
+    

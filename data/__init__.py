@@ -90,4 +90,6 @@ class CustomDatasetDataLoader():
         for i, data in enumerate(self.dataloader):
             if i * self.opt.batch_size >= self.opt.max_dataset_size:
                 break
-            yield data
+            yield data #yield is used in generators,
+            # Generators are iterators, a kind of iterable you can only iterate over once. 
+            # Generators do not store all the values in memory, they generate the values on the fly

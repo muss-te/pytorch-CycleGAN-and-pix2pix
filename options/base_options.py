@@ -46,7 +46,7 @@ class BaseOptions():
         parser.add_argument('--load_size', type=int, default=286, help='scale images to this size')
         parser.add_argument('--crop_size', type=int, default=256, help='then crop to this size')
         parser.add_argument('--max_dataset_size', type=int, default=float("inf"), help='Maximum number of samples allowed per dataset. If the dataset directory contains more than max_dataset_size, only a subset is loaded.')
-        parser.add_argument('--preprocess', type=str, default='resize_and_crop', help='scaling and cropping of images at load time [resize_and_crop | crop | scale_width | scale_width_and_crop | none]')
+        parser.add_argument('--preprocess', type=str, default='resize_and_crop', help='scaling and cropping of images at load time [resize_and_crop | crop | scale_width | scale_width_and_crop | none | teupy]')
         parser.add_argument('--no_flip', action='store_true', help='if specified, do not flip the images for data augmentation')
         parser.add_argument('--display_winsize', type=int, default=256, help='display window size for both visdom and HTML')
         # additional parameters
@@ -54,10 +54,14 @@ class BaseOptions():
         parser.add_argument('--load_iter', type=int, default='0', help='which iteration to load? if load_iter > 0, the code will load models by iter_[load_iter]; otherwise, the code will load models by [epoch]')
         parser.add_argument('--verbose', action='store_true', help='if specified, print more debugging information')
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{netG}_size{load_size}')
+        # new parameters
+        parser.add_argument('--debug_mode', action='store_true', help='activate the debug mode')
+        parser.add_argument('--test_subset', type=int, default=5, help='Test subset [0-5]')
+        
         self.initialized = True
         return parser
 
-    def gather_options(self):
+    def gather_options(self, raw_args=None):
         """Initialize our parser with basic options(only once).
         Add additional model-specific and dataset-specific options.
         These options are defined in the <modify_commandline_options> function
@@ -68,13 +72,13 @@ class BaseOptions():
             parser = self.initialize(parser)
 
         # get the basic options
-        opt, _ = parser.parse_known_args()
+        opt, _ = parser.parse_known_args(raw_args)
 
         # modify model-related parser options
         model_name = opt.model
         model_option_setter = models.get_option_setter(model_name)
         parser = model_option_setter(parser, self.isTrain)
-        opt, _ = parser.parse_known_args()  # parse again with new defaults
+        opt, _ = parser.parse_known_args(raw_args)  # parse again with new defaults
 
         # modify dataset-related parser options
         dataset_name = opt.dataset_mode
@@ -83,7 +87,7 @@ class BaseOptions():
 
         # save and return the parser
         self.parser = parser
-        return parser.parse_args()
+        return parser.parse_args(raw_args)
 
     def print_options(self, opt):
         """Print and save options
@@ -110,9 +114,9 @@ class BaseOptions():
             opt_file.write(message)
             opt_file.write('\n')
 
-    def parse(self):
+    def parse(self, raw_args=None):
         """Parse our options, create checkpoints directory suffix, and set up gpu device."""
-        opt = self.gather_options()
+        opt = self.gather_options(raw_args)
         opt.isTrain = self.isTrain   # train or test
 
         # process opt.suffix

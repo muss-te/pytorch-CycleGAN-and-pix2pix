@@ -8,6 +8,7 @@ import torch.utils.data as data
 from PIL import Image
 import torchvision.transforms as transforms
 from abc import ABC, abstractmethod
+from teupy import TransformToTensor, RandomCrop, Rotation
 
 
 class BaseDataset(data.Dataset, ABC):
@@ -80,6 +81,10 @@ def get_params(opt, size):
 
 def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, convert=True):
     transform_list = []
+    # if opt.preprocess == 'teupy':
+    #     transform_list.extend([Rotation(), RandomCrop(offset=-1, patch_size=256), TransformToTensor()])
+    #     return transform_list
+
     if grayscale:
         transform_list.append(transforms.Grayscale(1))
     if 'resize' in opt.preprocess:
@@ -92,26 +97,34 @@ def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, conve
         if params is None:
             transform_list.append(transforms.RandomCrop(opt.crop_size))
         else:
-            transform_list.append(transforms.Lambda(lambda img: __crop(img, params['crop_pos'], opt.crop_size)))
+            def tmp_func_crop(img):
+                return __crop(img, params['crop_pos'], opt.crop_size)
+            transform_list.append(transforms.Lambda(tmp_func_crop))
+            # transform_list.append(transforms.Lambda(lambda img: __crop(img, params['crop_pos'], opt.crop_size)))
 
     if opt.preprocess == 'none':
-        transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
-
+        transform_list.append(transforms.Lambda(tmp_func_none))
+        # transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
+    
     if not opt.no_flip:
         if params is None:
             transform_list.append(transforms.RandomHorizontalFlip())
         elif params['flip']:
-            transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
-
+            def tmp_func_no_flip(img):
+                return __flip(img, params['flip'])
+            transform_list.append(transforms.Lambda(tmp_func_no_flip))
+            # transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
+    
     if convert:
-        transform_list += [transforms.ToTensor()]
-        if grayscale:
-            transform_list += [transforms.Normalize((0.5,), (0.5,))]
-        else:
-            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        transform_list += [transforms.ToTensor(), 
+                           transforms.Normalize((0.5, 0.5, 0.5),
+                                                (0.5, 0.5, 0.5))] # [0, 255] -> [0, 1] -> [-1, 1]
     return transforms.Compose(transform_list)
 
+def tmp_func_none(img):
+    return __make_power_2(img, base=4)
 
+# leading dunder means name mangling to avoid naming conflicts in subclasses
 def __make_power_2(img, base, method=Image.BICUBIC):
     ow, oh = img.size
     h = int(round(oh / base) * base)
